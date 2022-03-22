@@ -1,36 +1,26 @@
 clear all;
 close all;
 clc;
-%%
-N = 1000;
+% Change values in user input section, final delay estimates in Tq
+%% User Input
+% Number of samples, sampling frequency, targets, duty ratio of pulse
+N = 2000;
 fs = 1000;
-L = 2;
-
+L = 3;
+D = 0.1;
+%--------------------------------------------------------------------------
+al = [0.4 0.5, 0.7];
+tl = [0.01 0.015, 0.03];
+vl = [0.04  0.07, 0.02];
+%% Generating Transmitted and received pulses
 P = 2*L;
 Ts = 1/fs;
 tau = 1/P * N * Ts;
 t = Ts:Ts:N*Ts;
 tt = 0:tau:N*Ts;
 h = @rectpuls;
-s = pulstran(t,tt,h,tau/10);
-s = [s(N - fix(N/(P*20)):N) , s(1:N - fix(N/(P*20)) - 1)];
-%-------------------------------------------------------------------------
-%figure
-subplot(3,2,1);
-plot (t,s);
-title('input pulse train');
-ylabel('h(t - P*tau)');
-xlabel('t (in sec)');
-subplot(3,2,2);
-plot(t,angle(s));
-title('phase input');
-%-------------------------------------------------------------------------
-% attenuation, delay and doppler
-% Note:      tl < N*Ts*9/(10*P) 
-%       and Δtl > N/(10*P*fs)
-al = [0.4 0.5];
-tl = [0.08 0.13];
-vl = [0.4  0.7];
+s = pulstran(t,tt,h,tau*D);
+s = [s(N - fix(N*D/(P*2)):N) , s(1:N - fix(N*D/(P*2)) - 1)];
 
 % received signal, 
 x = zeros(1,N);
@@ -50,7 +40,15 @@ for p = 1:P
     end
 end
 %-------------------------------------------------------------------------
-%figure;
+%figures;
+subplot(3,2,1);
+plot (t,s);
+title('input pulse train');
+ylabel('h(t - P*tau)');
+xlabel('t (in sec)');
+subplot(3,2,2);
+plot(t,angle(s));
+title('phase input');
 subplot(3,2,3);
 plot(t,abs(x));
 title('received signal');
@@ -71,133 +69,95 @@ plot(t,angle(xr));
 title('approximated received signal phase');
 ylabel('angle xr(t)');
 xlabel('t (in sec)');
-%-------------------------------------------------------------------------
-     
-xp = [xr(fix(N/P)+1:fix(2*N/P)) , zeros(1,N - fix(N/P))];
-xw = fft(xp);
-fx = (-length(xw)/2:length(xw)/2 - 1)*fs/length(xw);
+%-------------------------------------------------------------------------   
+% Get the P reflected pulses individually
+n = fix(N/P);
+xp = zeros(P,n);
+xpw = zeros(P,n);
+for p = 0:P-1
+   xp(p+1,:) = xr(p*n + 1: (p+1)*n);
+   xpw(p+1,:) = fft(xp(p+1,:));
+end
 
-hh = [ s(1:fix(N/P)), zeros(1,N - fix(N/P)) ];
+fxp = (-n/2:n/2 - 1)*fs/n;
+tp = Ts:Ts:n*Ts;
+
+% cropped transmitted pulse
+hh = s(1:n);
 hw = fft(hh);
 %-------------------------------------------------------------------------
 figure();
 subplot(2,2,1);
-plot(t,hh);
+plot(tp,hh);
 title('transmitted pulse');
 ylabel('hh');
 xlabel('t (in sec)');
 
 subplot(2,2,2);
-plot(fx/(2*pi),abs(fftshift(hw)));
+plot(fxp/(2*pi),abs(fftshift(hw)));
 title('fft of transmitted pulse');
 ylabel('abs(hw)');
 xlabel('w (in rad/s)');
 
 subplot(2,2,3);
-plot(t,abs(xp));
-title('time shifted pth reflected signal');
+plot(tp,abs(xp(1,:)));
+title('1st reflected signal');
 ylabel('xp(t + P*tau)');
 xlabel('t (in sec)');
 
 subplot(2,2,4);
-plot(fx/(2*pi),abs(fftshift(xw)));
-title('fft of time shifted pth reflection');
+plot(fxp/(2*pi),abs(fftshift(xpw(1,:))));
+title('fft of 1st reflection');
 ylabel('abs(xw)');
 xlabel('w (in rad/s)');
-%-------------------------------------------------------------------------
-%%
-xwk = zeros(1,2*L+1);
-hwk = zeros(1,2*L+1);
+%% Delay Estimation by method of annihilation
+K = 2*L + 1;
+xpwk = zeros(P,K);
+hwk = zeros(1,K);
 max_ft = zeros(l, fix(2*pi/max(tl)));
+Tq = zeros(min( fix(n*Ts/max(tl)), fix(n/K)), l);
 
-for wo = 1:fix(2*pi/max(tl))
+for wo = 1: min( fix(n*Ts/max(tl)), fix(n/K))
     good_wo = true;   
-    zpw = zeros(1,2*L+1);
+    zpwk = zeros(P,K);
     
-    for k = 1:2*L + 1
-       if(hw(k*wo)==0)
-           good_wo = false;     
-           break;
-       end
-       xwk(k) = xw(k*wo);           % Equation 3.6
-       hwk(k) = hw(k*wo);
-       zpw(k) =  xwk(k)/hwk(k);     % Equation 3.7
+    for k = 0:K-1
+        if(hw(k*wo+1)==0)
+            good_wo = false;     
+            break;
+        end
+        hwk(k+1) = hw(k*wo+1);
+        for p = 1:P
+            xpwk(p,k+1) = xpw(p,k*wo+1);
+            zpwk(p,k+1) =  xpwk(p,k+1)/hwk(k+1);
+        end
     end
     
     if(~good_wo)
-        wo
+       disp('h[kwo] = 0');
        continue;
     end
     
     F = zeros(L+1, L+1);
     for i = 1:L+1
         for j = 1:L+1
-            F(i,j) = zpw(L+1+i-j);
+            F(i,j) = zpwk(1, L+1+i-j);
         end
     end
 
     % annihilating filter  
-    
-    if(rank(F)<L | rank(F)==L+1) 
+
+    if(rank(F)==L+1) 
+        disp('Rank error');
         continue;
     end
     
     A = null(F);
     zqr = roots(A);
-
-    tq = angle(zqr);
     
-    ft = zeros(1, L);
-    for k = 1:2*L+1
-        for l = 1:L
-            ft(1, l) = ft(1, l) + zpw(k)*exp(-1j*k*wo*tq(l));
-        end
-    end
-    max_ft(:,wo) = ft;
-end
-
-[~, wopt] = max(max_ft, [] ,2);
-
-%% Calculating for wo = wopt1 and wo = wopt2
-for w = 1:2
-   for k = -4:4
-     xwk(k+5) = xw((abs(k)*wopt(w))+1);         %% Equation 3.6
-   end
-
-  for k = -4:4
-    hwk(k+5) = hw((abs(k)*wopt(w))+1);
-  end
-
-  for k = -4:4
-    zpw(k+5) =  xwk(k+5)/hwk(k+5);     %% Equation 3.7
-  end
-
-an1 = ((zpw(8)*zpw(5))-(zpw(7)*zpw(6)))/((zpw(6)*zpw(6))-(zpw(5)*zpw(7)));        %% Equation 3.11
-an2 = ((zpw(8)*zpw(6))-(zpw(7)*zpw(7)))/((zpw(5)*zpw(7))-(zpw(6)*zpw(6))); 
-
-zqr = roots([1,an1,an2]);
-
-tq(w) = abs(acos(real(zqr(w)))/(wopt(w)));
-end
-
-ft_opt1 = 0;
-ft_opt2 = 0;
-for k = 1:9
+    % Ensuring that the angle is from 0 to -2pi
+    arg = 2*pi - mod(angle(zqr), 2*pi);
+    tq = arg*n*Ts/(2*pi*wo);
     
-    ft_opt1 = ft_opt1 + (exp(-1j*(k-5)*wopt1*(tl(1))) * exp(1j*(k-5)*wopt1*tq(1)));  %% Equation 3.14
-    ft_opt2 = ft_opt2 + (exp(-1j*(k-5)*wopt2*(tl(2))) * exp(1j*(k-5)*wopt2*tq(2)));
+    Tq(wo, :) = tq;
 end
-
-
-%% removing delay effect
-dopp = zeros(1,25);
-for i = 1:L
-    rem = [x(1, (tl(i)*1000) + 1 : (tl(i)*1000) + 25 )];
-    dopp = dopp + rem;
-end
-
-%dopp = upsample(dopp, 40);
-dopp = [dopp , zeros(1,975)];
-%dopp =repmat(dopp,1,40);
-%plot (t,abs(dopp));
-
