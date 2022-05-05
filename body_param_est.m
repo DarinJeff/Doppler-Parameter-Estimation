@@ -1,7 +1,9 @@
 clear all;
 close all;
 clc;
-% Change values in user input section, final delay estimates in Tq
+% Change values in user input section
+% The final delay, body doppler and amplitude estimates are
+% in Tq, vq and aq respectively
 %% User Input
 % Number of samples, sampling frequency, targets, duty ratio of pulse
 N = 3000;
