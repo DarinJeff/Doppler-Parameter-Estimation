@@ -4,14 +4,14 @@ clc;
 % Change values in user input section, final delay estimates in Tq
 %% User Input
 % Number of samples, sampling frequency, targets, duty ratio of pulse
-N = 4000;
+N = 3000;
 fs = 2000;
-L = 4;
+L = 3;
 D = 0.1;
 %--------------------------------------------------------------------------
-al = [0.4, 0.5, 0.7, 0.2];
-tl = [0.05, 0.1, 0.125, 0.012];
-vl = [0.04, 0.07, 0.09, 0.03];
+al = [0.4, 0.5, 0.75];
+tl = [0.035, 0.05, 0.09];
+vl = [0.01, 0.04, 0.06];
 %% Generating Transmitted and received pulses
 %------------------------------------------
 % to ensure that the divisions are proper

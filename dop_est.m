@@ -4,14 +4,14 @@ clc;
 % Change values in user input section, final delay estimates in Tq
 %% User Input
 % Number of samples, sampling frequency, targets, duty ratio of pulse
-N = 4000;
+N = 3000;
 fs = 2000;
-L = 2;
+L = 3;
 D = 0.1;
 %--------------------------------------------------------------------------
-al = [0.4, 0.5, 0.7, 0.2];
-tl = [0.03, 0.12];
-vl = [0.01, 0.04, 0.09, 0.03];
+tl = [0.03, 0.04, 0.06];
+vl = [0.02, 0.042, 0.061];
+al = [0.4, 0.5, 0.75];
 %% Generating Transmitted and received pulses
 %------------------------------------------
 % to ensure that the divisions are proper
@@ -67,7 +67,7 @@ ylabel('angle xr(t)');
 xlabel('t (in sec)');
 %-------------------------------------------------------------------------  
 % noise
-sigmaN = 0.00000;
+sigmaN = 0.0000;
 xr = xr + randn(1,N)*sigmaN;
 %-------------------------------------------------------------------------  
 subplot(3,2,5);
@@ -171,11 +171,11 @@ for wo = 1: min( fix(n*Ts/max(tl)), fix(n/K))
     Tq(wo, :) = tq;
 end
 % Best estimate is in last non zero row - wo
-row_is_zero = all(Tq~=0,2);
-wo = find(row_is_zero,1,'last');
-tq = Tq(wo, :)
+row_not_zero = all(Tq~=0,2);
+wo = find(row_not_zero,1,'last');
+tq = Tq(wo, :);
 
-%% Doppler Estimation
+%% Doppler and Amplitude Estimation
 
 % Recalculate zpwk for w = wo
 for k = 0:K-1
@@ -195,42 +195,44 @@ for p = 1:P
     end
 end
 
-F1 = zeros(P-L, L+1);
-for i = 1:P-L
-    for j = 1:L+1
-        F1(i ,j) = zpq(1, L+1+i-j);
-    end
-end 
-[A,D] = eigs(F1'*F1,1,'SM');
-zqr1 = roots(A);
-
-arg = angle(zqr1);
-vq1 = -arg/tau;
-
-F2 = zeros(P-L, L+1);
-for i = 1:P-L
-    for j = 1:L+1
-        F2(i ,j) = zpq(1, L+1+i-j);
-    end
-end 
-[A,D] = eigs(F2'*F2,1,'SM');
-zqr2 = roots(A);
-
-arg = angle(zqr2);
-vq2 = -arg/tau;
-
-F = zeros(L*(P-L), L+1);
-for q = 1:L
-    for i = 1:P-L
+aq = zeros(1,L);
+vq = zeros(1,L);
+for l=1:L
+    F = zeros(L, L+1);
+    for i = 1:L
         for j = 1:L+1
-            F(i + (q-1)*(P-L),j) = zpq(q, L+1+i-j);
+            F(i,j) = zpq(l, L+1+i-j);
         end
-    end      
-end
-[A,D] = eigs(F'*F,1,'SM');
-zqr = roots(A);
-arg = angle(zqr);
-vq = -arg/tau;
+    end
 
+    % annihilating filter  
+
+    if(rank(F)~=L) 
+        disp('rank error');
+        continue;
+    end
+    
+    A = null(F);
+    zqr = roots(A);
+    
+    % Ensuring that the angle is from 0 to -2pi
+    arg = angle(zqr);
+    vr = -arg/tau;
+    
+    V = zeros(P, L);
+    ar = zeros(L,1);
+    for i = 1:P
+        for j = 1:L
+            V(i,j) = exp(-1i*vr(j)*(i-1)*tau);
+        end
+    end
+    ar = V\(zpq(l,:).');
+    ar = abs(ar)/K;
+    [am,im] = max(ar);
+    aq(l) = am;
+    vq(l) = vr(im);
+end
+tq
 vq
+aq
 %%
