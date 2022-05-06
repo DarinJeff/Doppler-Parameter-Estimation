@@ -1,15 +1,3 @@
-% test-script for VMD
-% authors: Dominique Zosso and Konstantin Dragomiretskiy
-% zosso@math.ucla.edu --- http://www.math.ucla.edu/~zosso
-% Initial release 2013-12-12 (c) 2013
-%
-% When using this code, please do cite our paper:
-% -----------------------------------------------
-% K. Dragomiretskiy, D. Zosso, Variational Mode Decomposition, IEEE Trans.
-% on Signal Processing (in press)
-% please check here for update reference: 
-%          http://dx.doi.org/10.1109/TSP.2013.2288675
-
 %--------------- Preparation
 clear all;
 close all;
